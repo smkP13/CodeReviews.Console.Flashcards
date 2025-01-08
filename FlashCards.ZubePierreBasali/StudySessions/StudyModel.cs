@@ -17,13 +17,13 @@
     internal class StudyOptions : IStudy
     {
         public int? QuestionCount { get; set; }
-        public string QuestionMode { get; set; }
-        public string TimerOnOff { get; set; }
+        public string? QuestionMode { get; set; }
+        public string? TimerOnOff { get; set; }
     }
 
     internal class StudyMonthly : IStudy
     {
         public int? QuestionCount {  get; set; }
-        public string Month {  get; set; }
+        public string? Month {  get; set; }
     }
 }

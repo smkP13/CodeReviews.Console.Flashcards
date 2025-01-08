@@ -31,19 +31,20 @@ namespace FlashCards.FlashCardsManager.Views
                                     if (validation) dataTools.DeleteStack(stack);
                                 }
                                 else if (option == "Add New Card")
-                                { 
+                                {
                                     bool adding = true;
                                     while (adding)
                                     {
                                         AnsiConsole.Clear();
-                                        stacksController.AddNewCard(stack.Name,dataTools);
+                                        stacksController.AddNewCard(stack.Name, dataTools);
                                         adding = UserInputs.Validation("Add Another Card?");
                                     }
                                 }
                             }
                         }
+                        run = UserInputs.Validation("Do you want to continue managing stacks");
                     }
-                    run = UserInputs.Validation("Do you want to continue managing stacks");
+                    else run = false;
                 } while (run);
             }
             else

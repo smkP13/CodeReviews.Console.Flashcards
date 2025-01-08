@@ -1,71 +1,77 @@
 ﻿using FlashCards.FlashCardsManager.Models;
 using Spectre.Console;
-using System.Configuration;
 using Dapper;
 using System.Data;
-using System.Data.SqlClient;
-
+using Microsoft.Data.SqlClient;
 using FlashCards.StudySessions;
+using System.Configuration;
+using FlashCards.FlashCardsManager;
 
 namespace FlashCards.Database
 {
     internal class DataTools
     {
-        internal string ConnectionString { get; set;}
+        internal string? ConnectionString { get; set;}
+        internal string? SqlCommandText { get; set; }
 
         internal void Initialization()
         {
+
             try
             {
-                string sqlCommandText;
                 Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
                 try
                 {
-                    if (config.AppSettings.Settings["connectionString"].Value == "")
+                    // First attempted method to access my local data source, seems the syntax varies depending on the computer location(here Switzerland)
+                    // ConnectionString = @$"Data Source=localhost;Integrated Security=SSPI;Initial Catalog=;TrustServerCertificate=True;";
+                    ConnectionString = @"Data Source=.;Integrated Security=SSPI;Initial Catalog=;TrustServerCertificate=True;";
+                    if (config.AppSettings.Settings["DataBaseName"].Value == "")
                     {
-                        string connectionString = @$"Data Source=localhost;Integrated Security=SSPI;Initial Catalog=;TrustServerCertificate=True;";
-                        config.AppSettings.Settings["connectionString"].Value = connectionString;
+                        config.AppSettings.Settings["DataBaseName"].Value = UserInputs.GetInputString("Choose a name for your data base:");
                         config.Save();
-                        using (SqlConnection connection = new(connectionString))
+                        using (SqlConnection connection = new(ConnectionString))
                         {
                             if (connection.State == ConnectionState.Closed) connection.Open();
-                            sqlCommandText = $@"CREATE DATABASE FlashCardsDB";
-                        sqlCommandText = "nejwrnw";
+                            SqlCommandText = $@"CREATE DATABASE {config.AppSettings.Settings["DataBaseName"].Value}";
                             SqlCommand command = connection.CreateCommand();
-                            command.CommandText = sqlCommandText;
+                            command.CommandText = SqlCommandText;
                             command.ExecuteNonQuery();
                             connection.Close();
                         }
                     }
+                
                 }
-                catch(Exception ex) { throw ex; }
+                catch { }
 
                 try
                 {
-                    ConnectionString = $"Data Source=localhost;Initial Catalog=FlashCardsDB;Integrated Security=True;TrustServerCertificate=True;";
+                    // same as above
+                    // ConnectionString = $"Data Source=localhost;Initial Catalog={config.AppSettings.Settings["DataBaseName"].Value};Integrated Security=True;TrustServerCertificate=True;";
+
+                    ConnectionString = @$"Data Source=.;Initial Catalog={config.AppSettings.Settings["DataBaseName"].Value};Integrated Security=True;TrustServerCertificate=True;";
                     using (SqlConnection connection = new(ConnectionString))
                     {
                         connection.Open();
                         SqlCommand command = connection.CreateCommand();
-                        sqlCommandText = @"IF OBJECT_ID(N'dbo.Stacks', N'U') IS NULL CREATE TABLE Stacks (Name nvarchar(20) PRIMARY KEY,NumberOfCards INTEGER,Id INTEGER);
+                        SqlCommandText = @"IF OBJECT_ID(N'dbo.Stacks', N'U') IS NULL CREATE TABLE Stacks (Id INTEGER PRIMARY KEY,NumberOfCards INTEGER,Name nvarchar(20));
 
-                                           IF OBJECT_ID(N'dbo.FlashCards', N'U') IS NULL CREATE TABLE FlashCards (Stack nvarchar(20),Id INTEGER, Question TEXT,Answer TEXT);
-                                           
-                                           IF NOT (EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'FK_FlashCards_Stacks')) ALTER TABLE [dbo].[FlashCards]
-                                           WITH CHECK ADD CONSTRAINT [FK_FlashCards_Stacks] FOREIGN KEY ([Stack])
-                                           REFERENCES [dbo].[Stacks] ([Name]) ON UPDATE CASCADE ON DELETE CASCADE;
-                                           
-                                           IF OBJECT_ID(N'dbo.StudySessions', N'U') IS NULL CREATE TABLE StudySessions (Stack nvarchar(20), Date DATE,QuestionMode TEXT,QuestionCount INTEGER,Score INTEGER,Time TIME);
-                                           
-                                           IF NOT (EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'FK_StudySessions_Stacks')) ALTER TABLE [dbo].[StudySessions]
-                                           WITH CHECK ADD CONSTRAINT [FK_StudySessions_Stacks] FOREIGN KEY ([Stack])
-                                           REFERENCES [dbo].[Stacks] ([Name]) ON UPDATE CASCADE ON DELETE CASCADE;";
-                        command.CommandText = sqlCommandText;
+                                       IF OBJECT_ID(N'dbo.FlashCards', N'U') IS NULL CREATE TABLE FlashCards (StackId INTEGER,Stack nvarchar(20),Id INTEGER, Question TEXT,Answer TEXT);
+                                       
+                                       IF NOT (EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'FK_FlashCards_Stacks')) ALTER TABLE [dbo].[FlashCards]
+                                       WITH CHECK ADD CONSTRAINT [FK_FlashCards_Stacks] FOREIGN KEY ([StackId])
+                                       REFERENCES [dbo].[Stacks] ([Id]) ON UPDATE CASCADE ON DELETE CASCADE;
+                                       
+                                       IF OBJECT_ID(N'dbo.StudySessions', N'U') IS NULL CREATE TABLE StudySessions (StackId INTEGER,Stack nvarchar(20),Date DATE,QuestionMode TEXT,QuestionCount INTEGER,Score INTEGER,Time TIME);
+                                       
+                                       IF NOT (EXISTS(SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'FK_StudySessions_Stacks')) ALTER TABLE [dbo].[StudySessions]
+                                       WITH CHECK ADD CONSTRAINT [FK_StudySessions_Stacks] FOREIGN KEY ([StackId])
+                                       REFERENCES [dbo].[Stacks] ([Id]) ON UPDATE CASCADE ON DELETE CASCADE;";
+                        command.CommandText = SqlCommandText;
                         command.ExecuteNonQuery();
                         connection.Close();
                     }
                 }
-                catch(Exception ex) { throw ex; }
+                catch (Exception ex) { throw ex; }
             }
             catch (Exception ex)
             {
@@ -73,13 +79,14 @@ namespace FlashCards.Database
             }
         }
 
-        internal void ExecuteQuery(string sqlCommand,string stack = "", string question = "",string answer = "",int numberOfCards = 0,int id = 0,string date = "",string time = "",string questionMode = "",int? questionCount = 0, int score = 0)
+        internal void ExecuteQuery(string sqlCommand,string stack = "",int stackId = 0, string question = "",string answer = "",int numberOfCards = 0,int id = 0,string date = "",string time = "",string questionMode = "",int? questionCount = 0, int score = 0)
         {
             try
             {
                 using (SqlConnection connection = new(ConnectionString))
                 {
                     DynamicParameters param = new();
+                    param.Add("@stackId", stackId);
                     param.Add("@stack", stack);
                     param.Add("@question", question);
                     param.Add("@answer", answer);
@@ -102,18 +109,18 @@ namespace FlashCards.Database
 
         internal void DeleteCard(FlashCard card,string stack)
         {
-            string sqlCommand = @$"DELETE FROM FlashCards WHERE Id = @id AND Stack = @stack;
+            SqlCommandText = @$"DELETE FROM FlashCards WHERE Id = @id AND Stack = @stack;
                                 UPDATE FlashCards SET Id = Id - 1 WHERE Id > @id AND Stack = @stack";
-            ExecuteQuery(sqlCommand, stack: stack, id:card.Id);
+            ExecuteQuery(SqlCommandText, stack: stack, id:card.Id);
             UpdateStack(stack);
         }
 
         internal void DeleteStack(Stacks stack)
         {
-            string sqlCommand = $"DELETE FROM Stacks WHERE Name = @stack";
-            ExecuteQuery(sqlCommand, stack:stack.Name);
-            sqlCommand = "UPDATE Stacks Set Id = Id - 1 WHERE Id > @id;";
-            ExecuteQuery(sqlCommand, id:stack.Id);
+            SqlCommandText = $"DELETE FROM Stacks WHERE Name = @stack";
+            ExecuteQuery(SqlCommandText, stack:stack.Name);
+            SqlCommandText = "UPDATE Stacks Set Id = Id - 1 WHERE Id > @id;";
+            ExecuteQuery(SqlCommandText, id:stack.Id);
         }
 
         internal List<FlashCard> GetFlashCards(string stack)
@@ -122,8 +129,8 @@ namespace FlashCards.Database
             {
                 DynamicParameters param = new();
                 param.Add("@stack", stack);
-            string sqlCommand = $"SELECT Id,* FROM FlashCards WHERE Stack = @stack ORDER BY FlashCards.Id";
-                return connection.Query<FlashCard>(sqlCommand, param ).ToList();
+                SqlCommandText = $"SELECT Id,* FROM FlashCards WHERE Stack = @stack ORDER BY FlashCards.Id";
+                return connection.Query<FlashCard>(SqlCommandText, param ).ToList();
             }
         }
 
@@ -132,33 +139,32 @@ namespace FlashCards.Database
 
             using (SqlConnection connection = new(ConnectionString))
             {
-                string sqlCommand = $"SELECT Id,* FROM Stacks";
-                List<Stacks> stacks = connection.Query<Stacks>(sqlCommand).ToList();
+                SqlCommandText = $"SELECT Id,* FROM Stacks";
+                List<Stacks> stacks = connection.Query<Stacks>(SqlCommandText).ToList();
                 return stacks;
             } 
         }
 
         internal void UpdateCard(FlashCard card,string option, string value,string stack)
         {
-            string? sqlCommand;
             switch (option)
             {
                 case "Question":
-                    sqlCommand = "UPDATE FlashCards SET Question = @question WHERE Id = @id";
-                    ExecuteQuery(sqlCommand, stack:stack, question: value,id:card.Id);
+                    SqlCommandText = "UPDATE FlashCards SET Question = @question WHERE Id = @id";
+                    ExecuteQuery(SqlCommandText, stack:stack, question: value,id:card.Id);
                     UpdateStack(stack);
                     break;
                 case "Answer":
-                    sqlCommand = "UPDATE FlashCards SET Answer = @answer WHERE Id = @id and Stack = @stack";
-                    ExecuteQuery(sqlCommand, stack: stack, answer: value,id:card.Id);
+                    SqlCommandText = "UPDATE FlashCards SET Answer = @answer WHERE Id = @id and Stack = @stack";
+                    ExecuteQuery(SqlCommandText, stack: stack, answer: value,id:card.Id);
                     UpdateStack(stack);
                     break;
                 case "Stack":
-                    sqlCommand = @"UPDATE FlashCards SET Stack = @answer,
+                    SqlCommandText = @"UPDATE FlashCards SET Stack = @answer,
                                  Id = (SELECT ISNULL(MAX(Id)+1,1) FROM FlashCards WHERE Stack = @answer)
                                  WHERE Id = @id AND Stack = @stack;
                                  UPDATE FlashCards Set Id = Id - 1 WHERE Id > @id AND Stack = @stack";
-                    ExecuteQuery(sqlCommand, stack: stack, answer:value,id:card.Id);
+                    ExecuteQuery(SqlCommandText, stack: stack, answer:value,id:card.Id);
                     UpdateStack(stack);
                     break;
             }
@@ -166,18 +172,18 @@ namespace FlashCards.Database
 
         internal void UpdateStack(string stack)
         {
-            string sqlCommand = @$"UPDATE Stacks SET NumberOfCards = (SELECT Count(Stack) FROM FlashCards WHERE Stack = @stack)
+            SqlCommandText = @$"UPDATE Stacks SET NumberOfCards = (SELECT Count(Stack) FROM FlashCards WHERE Stack = @stack)
                                 WHERE Name = @stack;";
-            ExecuteQuery(sqlCommand,stack:stack);
+            ExecuteQuery(SqlCommandText, stack:stack);
         }
 
         internal void AddNewStack(Stacks stack)
         {
             try
             {
-                string sqlCommand = @$"INSERT INTO Stacks (Name,NumberOfCards,Id) VALUES(@stack,@numberOfCards,
+                SqlCommandText = @$"INSERT INTO Stacks (Name,NumberOfCards,Id) VALUES(@stack,@numberOfCards,
                                     (SELECT ISNULL(MAX(Id)+1,1) FROM Stacks))";
-                ExecuteQuery(sqlCommand, stack.Name, numberOfCards: stack.NumberOfCards);
+                ExecuteQuery(SqlCommandText, stack.Name, numberOfCards: stack.NumberOfCards);
             }
             catch (Exception ex)
             {
@@ -187,26 +193,26 @@ namespace FlashCards.Database
 
         internal void AddCard(FlashCard card,string stack)
         {
-            string sqlCommand = @$"INSERT INTO FlashCards (Question,Answer,Stack,Id) 
+            SqlCommandText = @$"INSERT INTO FlashCards (Question,Answer,Stack,Id) 
                                 VALUES(@question,@answer,@stack,
                                 (SELECT ISNULL(MAX(Id)+1,1) FROM FlashCards WHERE Stack = @stack))";
-            ExecuteQuery(sqlCommand, question: card.Question, answer: card.Answer, stack: stack);
+            ExecuteQuery(SqlCommandText, question: card.Question, answer: card.Answer, stack: stack);
             UpdateStack(stack);
         }
 
         internal void AddStudySession(StudyModel studySession)
         {
-            string sqlCommand = @$"INSERT INTO StudySessions (Date,Stack,QuestionMode,QuestionCount,Score,Time)
+            SqlCommandText = @$"INSERT INTO StudySessions (Date,Stack,QuestionMode,QuestionCount,Score,Time)
                                 VALUES(@date,@stack,@questionMode,@questionCount,@score,@time)";
-            ExecuteQuery(sqlCommand, date: studySession.Date, stack: studySession.Stack,questionMode:studySession.QuestionMode, questionCount: studySession.QuestionCount, score: studySession.Score,time: studySession.Time);
+            ExecuteQuery(SqlCommandText, date: studySession.Date, stack: studySession.Stack,questionMode:studySession.QuestionMode, questionCount: studySession.QuestionCount, score: studySession.Score,time: studySession.Time);
         }
 
         internal List<StudyModel> GetAllStudySessions()
         {
             using (SqlConnection connection = new(ConnectionString))
             {
-                string sqlCommand = "SELECT Stack,Date,QuestionMode,QuestionCount,Score,(FORMAT(Time,'hh')+':'+FORMAT(Time,'mm')+':'+FORMAT(Time,'ss')) as Time FROM StudySessions ORDER BY Stack,Date;";
-                List<StudyModel> sessions = connection.Query<StudyModel>(sqlCommand).ToList();
+                SqlCommandText = "SELECT Stack,Date,QuestionMode,QuestionCount,Score,(FORMAT(Time,'hh')+':'+FORMAT(Time,'mm')+':'+FORMAT(Time,'ss')) as Time FROM StudySessions ORDER BY Stack,Date;";
+                List<StudyModel> sessions = connection.Query<StudyModel>(SqlCommandText).ToList();
                 return sessions;
             }
         }
@@ -215,10 +221,10 @@ namespace FlashCards.Database
         {
             using (SqlConnection connection = new(ConnectionString))
             {
-                string sqlCommand = @"SELECT Stack,QuestionMode,QuestionCount,Score,
+                SqlCommandText = @"SELECT Stack,QuestionMode,QuestionCount,Score,
                                (FORMAT(Time,'hh')+':'+FORMAT(Time,'mm')+':'+FORMAT(Time,'ss')) as Time,
                                (FORMAT(Date,'yyyy')+'-'+FORMAT(Date,'MM')+'-'+FORMAT(Date,'dd')) as Date FROM StudySessions ORDER BY Date;";
-                List<StudyModel> sessions = connection.Query<StudyModel>(sqlCommand).Where(x => x.Stack == stack).ToList();
+                List<StudyModel> sessions = connection.Query<StudyModel>(SqlCommandText).Where(x => x.Stack == stack).ToList();
                 return sessions;
             }
         }
@@ -227,12 +233,12 @@ namespace FlashCards.Database
         {
             using (SqlConnection connection = new(ConnectionString))
             {
-                string sqlCommand = $@"SELECT Format(Date,'yyyy-MM') as Month,
+                SqlCommandText = $@"SELECT Format(Date,'yyyy-MM') as Month,
                                 count(Format(Date,'yyyy-MM')) as QuestionCount ,
                                 sum(Score) as TotalScore
                                 FROM StudySessions WHERE Stack = @stack GROUP by Format(Date,'yyyy-MM') ORDER BY FORMAT(Date,'yyyy-MM');";
                 List<StudyMonthly> monthly = new();
-                monthly = connection.Query<StudyMonthly>(sqlCommand, new { stack }).ToList();
+                monthly = connection.Query<StudyMonthly>(SqlCommandText, new { stack }).ToList();
                 return monthly;
             }
         }

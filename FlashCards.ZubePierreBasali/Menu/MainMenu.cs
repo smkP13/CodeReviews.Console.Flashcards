@@ -44,7 +44,7 @@ namespace FlashCards.Menu
                         return;
                     case "(Test) Add test stacks and cards":
                         stacksController.CreateTestStacks(dataTools);
-                        studyController.CreateStudySessionsData(dataTools);
+                        studyController.DataSeeding(dataTools);
                         break;
                 }
 

@@ -19,16 +19,16 @@ namespace FlashCards.FlashCardsManager.Views
                     try
                     {
                         AnsiConsole.Clear();
-                        FlashCard? selectedCard = flashCardsController.GetFlashCard(stack.Name,dataTools);
-                
+                        FlashCard? selectedCard = flashCardsController.GetFlashCard(stack.Name, dataTools);
+
                         string? option = selectedCard.Question == "[red]Cancel[/]" ? "[red]Cancel[/]" : AnsiConsole.Prompt(
                             new SelectionPrompt<string>().AddChoices("[red]Cancel[/]", "Update", "Delete"));
-                
+
                         if (option == "Delete")
                         {
                             AnsiConsole.Clear();
                             validation = UserInputs.Validation($"Are you sure you want to delete this card?");
-                            if (validation) dataTools.DeleteCard(selectedCard,stack.Name);
+                            if (validation) dataTools.DeleteCard(selectedCard, stack.Name);
                         }
                         else if (option == "Update")
                         {
@@ -56,16 +56,17 @@ namespace FlashCards.FlashCardsManager.Views
                                     validation = UserInputs.Validation($"Are you sure you want to update this card?");
                                     if (validation)
                                     {
-                                        dataTools.UpdateCard(selectedCard, option, value,stack.Name);
+                                        dataTools.UpdateCard(selectedCard, option, value, stack.Name);
 
                                     }
                                 }
                             }
                         }
+                        else run = UserInputs.Validation("Do you want to keep managing cards?");
                     }
                     catch (Exception ex) { Console.WriteLine(ex.Message); }
                 }
-                run = UserInputs.Validation("Do you want to keep managing cards?");
+                else run = false;
             } while (run);
         }
     }

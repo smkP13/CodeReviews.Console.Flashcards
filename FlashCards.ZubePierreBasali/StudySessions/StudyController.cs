@@ -31,7 +31,7 @@ namespace FlashCards.StudySessions
                 {
                     if (model.QuestionCount == null)
                     {
-                        Random random = new();
+                        Random random = Random.Shared;
                         model.QuestionCount = model.QuestionMode == "Random" ?
                             random.Next(stack.NumberOfCards / 4, stack.NumberOfCards)
                             : stack.NumberOfCards;
@@ -216,7 +216,7 @@ namespace FlashCards.StudySessions
             }
         }
 
-        internal  void CreateStudySessionsData(DataTools dataTools)
+        internal  void DataSeeding(DataTools dataTools)
         {
             Random random = new();
             StudyModel study = new();
